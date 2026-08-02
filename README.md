@@ -98,10 +98,10 @@ cp .env.example .env
 uv sync
 
 # Or using pip
-pip install -r requirements.txt
+uv add -r requirements.txt
 
 # Start the server
-uvicorn main:app --reload --port 8000
+uv run fastapi dev
 ```
 
 The API will be available at `http://localhost:8000`.

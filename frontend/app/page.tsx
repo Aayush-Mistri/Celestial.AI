@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 
 type Message = {
   id: string;
@@ -36,21 +36,9 @@ const defaultGraph: GraphDetails = {
   name: "Basic LangGraph Chatbot",
   model: "llama-3.3-70b-versatile",
   steps: [
-    {
-      id: "start",
-      label: "START",
-      description: "Request enters the graph with the user's message.",
-    },
-    {
-      id: "superbot",
-      label: "superbot",
-      description: "ChatGroq receives the stored conversation and creates the reply.",
-    },
-    {
-      id: "end",
-      label: "END",
-      description: "The graph returns the updated message state.",
-    },
+    { id: "start", label: "START", description: "Request enters the graph with the user's message." },
+    { id: "superbot", label: "superbot", description: "ChatGroq receives the stored conversation and creates the reply." },
+    { id: "end", label: "END", description: "The graph returns the updated message state." },
   ],
   edges: [
     { from: "start", to: "superbot" },
@@ -59,9 +47,26 @@ const defaultGraph: GraphDetails = {
   mermaid: "graph TD\n  START --> superbot\n  superbot --> END",
 };
 
+/* ---------------------------------- */
+/* Icons — thin stroke, neutral tones */
+/* ---------------------------------- */
+
+const PlusIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m-7-7h14" />
+  </svg>
+);
+
+const MicIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 11a7 7 0 01-14 0M12 18v3" />
+  </svg>
+);
+
 const SendIcon = () => (
-  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19V5m0 0-6 6m6-6 6 6" />
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M12 19V5m0 0l-6 6m6-6l6 6" />
   </svg>
 );
 
@@ -71,14 +76,33 @@ const ResetIcon = () => (
   </svg>
 );
 
+const UserIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+);
+
 const AgentMark = () => (
-  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-neutral-950 text-[11px] font-semibold text-white dark:bg-neutral-100 dark:text-neutral-950">
+  <div className="flex items-center justify-center w-5 h-5 rounded-[4px] bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-[10px] font-semibold tracking-tight">
     G
   </div>
 );
 
+const SidebarIcon = ({ children }: { children: React.ReactNode }) => (
+  <button
+    type="button"
+    className="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60 transition-colors"
+  >
+    {children}
+  </button>
+);
+
 const getTime = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+/* ---------------------------------- */
+/* Page                               */
+/* ---------------------------------- */
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -91,7 +115,7 @@ export default function Home() {
     superbot: "idle",
     end: "idle",
   });
-  const [threadId, setThreadId] = useState(() => `thread-${Date.now()}`);
+  const [threadId, setThreadId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -102,10 +126,11 @@ export default function Home() {
     "Give me a short AI agent idea",
   ];
 
-  const completedSteps = useMemo(
-    () => Object.values(workflow).filter((status) => status === "complete").length,
-    [workflow],
-  );
+  // Generate the thread id only after mount so the server-rendered HTML
+  // and the client's first render match exactly (fixes hydration mismatch).
+  useEffect(() => {
+    setThreadId(`thread-${Date.now()}`);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -231,92 +256,133 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen bg-[#f7f7f3] text-neutral-950 dark:bg-[#111111] dark:text-neutral-100">
-      <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-neutral-200 bg-[#f7f7f3]/90 px-4 backdrop-blur dark:border-neutral-800 dark:bg-[#111111]/90 sm:px-7">
-          <div className="flex items-center gap-3">
+    <main className="flex h-screen w-full font-mono antialiased bg-[#F7F7F5] dark:bg-[#121212] text-neutral-900 dark:text-neutral-100">
+      {/* Icon rail */}
+      <aside className="hidden sm:flex flex-col items-center justify-between w-16 py-4 border-r border-neutral-200 dark:border-neutral-800 bg-[#F0F0EE] dark:bg-[#161616]">
+        <div className="flex flex-col items-center gap-3">
+          <AgentMark />
+          <div className="w-6 h-px bg-neutral-300 dark:bg-neutral-700 my-1" />
+          <SidebarIcon>
+            <PlusIcon />
+          </SidebarIcon>
+          <SidebarIcon>
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8-1.06 0-2.078-.163-3.024-.463L3 21l1.395-3.72C3.512 16.042 3 14.574 3 13c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </SidebarIcon>
+        </div>
+        <SidebarIcon>
+          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.75}
+              d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"
+            />
+          </svg>
+        </SidebarIcon>
+      </aside>
+
+      {/* Chat column */}
+      <div className="relative flex flex-col flex-1 min-w-0">
+        <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-5 sm:px-8 border-b border-neutral-200 dark:border-neutral-800 bg-[#F7F7F5]/90 dark:bg-[#121212]/90 backdrop-blur-md">
+          <div className="flex items-center gap-2.5">
             <AgentMark />
-            <div>
-              <p className="text-sm font-semibold">LangGraph Chatbot</p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <div className="leading-tight">
+              <p className="text-[13px] font-semibold tracking-wide text-neutral-800 dark:text-neutral-200">
+                LangGraph Chatbot
+              </p>
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-500">
                 {graphDetails.model}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 text-[11px]">
             {latency !== null && (
-              <span className="hidden text-xs text-neutral-500 sm:inline">{latency}ms</span>
+              <span className="hidden sm:inline text-neutral-500 dark:text-neutral-500">
+                {latency}ms
+              </span>
             )}
             <button
               type="button"
               onClick={resetThread}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-300 bg-white text-neutral-600 transition hover:border-neutral-500 hover:text-neutral-950 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-500"
               title="Reset memory"
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60 transition-colors"
             >
               <ResetIcon />
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-7">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+        {/* Message stream */}
+        <div className="relative flex-1 overflow-y-auto px-4 sm:px-6 py-8">
+          <div className="max-w-3xl mx-auto w-full space-y-6">
             {messages.length === 0 && (
-              <div className="flex min-h-[54vh] flex-col justify-center gap-6">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
-                    Notebook to backend graph
-                  </p>
-                  <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                    Chat with the raw LangGraph flow from your ipynb.
-                  </h1>
-                  <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-                    The backend keeps thread memory, runs the compiled graph, and streams
-                    workflow events back into this page.
-                  </p>
-                </div>
+              <div className="flex flex-col items-center justify-center h-[62vh] text-center space-y-7">
+                <h1 className="text-2xl sm:text-3xl font-sans font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                  Let&apos;s chat.
+                </h1>
+                <p className="max-w-sm text-sm font-sans text-neutral-500 dark:text-neutral-400">
+                  Connected to your LangGraph backend. Thread memory persists until you reset it.
+                </p>
 
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {suggestions.map((suggestion) => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full text-left">
+                  {suggestions.map((prompt, idx) => (
                     <button
-                      key={suggestion}
-                      type="button"
+                      key={idx}
                       onClick={() => {
-                        setInput(suggestion);
+                        setInput(prompt);
                         textareaRef.current?.focus();
                       }}
-                      className="rounded-lg border border-neutral-200 bg-white p-3 text-left text-sm text-neutral-700 transition hover:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-600"
+                      className="p-3 text-xs font-sans text-left border border-neutral-200 dark:border-neutral-800 rounded-lg bg-white dark:bg-[#191919] hover:border-neutral-400 dark:hover:border-neutral-600 transition-colors text-neutral-700 dark:text-neutral-300"
                     >
-                      {suggestion}
+                      <span className="text-neutral-400 dark:text-neutral-600 mr-2">→</span>
+                      {prompt}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {messages.map((message) => (
+            {messages.map((msg) => (
               <div
-                key={message.id}
-                className={`flex flex-col gap-1.5 ${
-                  message.sender === "user" ? "items-end" : "items-start"
-                }`}
+                key={msg.id}
+                className={`flex flex-col ${
+                  msg.sender === "user" ? "items-end" : "items-start"
+                } space-y-1.5`}
               >
-                <span className="px-1 text-[11px] text-neutral-500">
-                  {message.sender === "user" ? "You" : "Graph"} at {message.timestamp}
-                </span>
-                <div
-                  className={`max-w-[88%] whitespace-pre-wrap rounded-xl border px-4 py-3 text-sm leading-6 sm:max-w-[76%] ${
-                    message.sender === "user"
-                      ? "border-neutral-950 bg-neutral-950 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-950"
-                      : "border-neutral-200 bg-white text-neutral-900 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
-                  }`}
-                >
-                  {message.text || (
-                    <span className="inline-flex items-center gap-2 text-neutral-500">
-                      <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
-                      Running graph...
-                    </span>
+                <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 dark:text-neutral-600 uppercase tracking-widest px-1">
+                  {msg.sender === "user" ? (
+                    <>
+                      <span>You</span> <UserIcon />
+                    </>
+                  ) : (
+                    <>
+                      <AgentMark />
+                      <span className="text-neutral-500 dark:text-neutral-400 font-semibold normal-case">
+                        Graph
+                      </span>
+                    </>
                   )}
+                  <span className="lowercase tracking-normal">· {msg.timestamp}</span>
+                </div>
+
+                <div
+                  className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm rounded-xl border font-sans leading-relaxed whitespace-pre-wrap
+                    ${
+                      msg.sender === "user"
+                        ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-neutral-900 dark:border-neutral-100"
+                        : "bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 border-neutral-200 dark:border-neutral-800"
+                    }`}
+                >
+                  {msg.text || (isLoading && msg.sender === "ai" && (
+                    <div className="flex items-center gap-2 text-xs font-mono text-neutral-400 dark:text-neutral-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-600 animate-pulse" />
+                      <span>Running graph…</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -325,113 +391,57 @@ export default function Home() {
           </div>
         </div>
 
-        <footer className="border-t border-neutral-200 bg-[#f7f7f3] px-4 py-4 dark:border-neutral-800 dark:bg-[#111111] sm:px-7">
-          <form
-            onSubmit={handleSubmit}
-            className="mx-auto flex max-w-3xl flex-col rounded-xl border border-neutral-300 bg-white shadow-sm transition focus-within:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900"
-          >
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask the LangGraph chatbot..."
-              rows={2}
-              disabled={isLoading}
-              className="min-h-16 resize-none bg-transparent px-4 py-3 text-sm outline-none placeholder:text-neutral-400 disabled:opacity-60"
-            />
-            <div className="flex items-center justify-between px-3 pb-3">
-              <span className="text-xs text-neutral-500">
-                Thread memory: {threadId.replace("thread-", "#")}
-              </span>
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-neutral-950 text-white transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 dark:bg-neutral-100 dark:text-neutral-950 dark:hover:bg-neutral-300 dark:disabled:bg-neutral-800"
-                title="Send"
-              >
-                <SendIcon />
-              </button>
-            </div>
-          </form>
-        </footer>
-      </section>
+        {/* Input */}
+        <footer className="sticky bottom-0 z-20 px-4 sm:px-6 pb-5 pt-2 bg-gradient-to-t from-[#F7F7F5] dark:from-[#121212] via-[#F7F7F5]/95 dark:via-[#121212]/95 to-transparent">
+          <div className="max-w-3xl mx-auto w-full">
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col border border-neutral-300 dark:border-neutral-700 rounded-2xl bg-white dark:bg-[#191919] focus-within:border-neutral-500 dark:focus-within:border-neutral-500 transition-colors shadow-sm"
+            >
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask the LangGraph chatbot…"
+                rows={2}
+                disabled={isLoading}
+                className="w-full px-4 pt-3.5 pb-1.5 bg-transparent border-none text-sm font-sans focus:outline-none resize-none placeholder:text-neutral-400 dark:placeholder:text-neutral-600 disabled:opacity-50"
+              />
 
-      <aside className="hidden w-[390px] shrink-0 border-l border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-950 lg:block">
-        <div className="flex h-full flex-col gap-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-neutral-500">
-              Backend flow
-            </p>
-            <h2 className="mt-2 text-xl font-semibold">{graphDetails.name}</h2>
-            <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-              {completedSteps}/{graphDetails.steps.length} steps completed in the latest run.
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-            <div className="flex items-center justify-between gap-3">
-              {graphDetails.steps.map((step, index) => {
-                const status = workflow[step.id] || "idle";
-                return (
-                  <div key={step.id} className="flex flex-1 items-center">
-                    <div className="flex flex-1 flex-col items-center gap-2">
-                      <div
-                        className={`flex h-12 w-12 items-center justify-center rounded-lg border text-xs font-semibold ${
-                          status === "complete"
-                            ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                            : status === "running"
-                              ? "border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-                              : status === "error"
-                                ? "border-red-500 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
-                                : "border-neutral-300 bg-neutral-50 text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900"
-                        }`}
-                      >
-                        {index + 1}
-                      </div>
-                      <span className="text-center text-xs font-medium">{step.label}</span>
-                    </div>
-                    {index < graphDetails.steps.length - 1 && (
-                      <div className="mx-1 h-px w-8 bg-neutral-300 dark:bg-neutral-700" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            {graphDetails.steps.map((step) => {
-              const status = workflow[step.id] || "idle";
-              return (
-                <div
-                  key={step.id}
-                  className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold">{step.label}</p>
-                    <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] uppercase text-neutral-500 dark:border-neutral-700">
-                      {status}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-neutral-600 dark:text-neutral-400">
-                    {step.description}
-                  </p>
+              <div className="flex items-center justify-between px-2.5 pb-2.5 pt-1">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    <PlusIcon />
+                  </button>
+                  <span className="hidden sm:inline text-[11px] text-neutral-400 dark:text-neutral-600 font-sans ml-1">
+                    {threadId ? `Thread ${threadId.replace("thread-", "#")} · ` : ""}Enter to send
+                  </span>
                 </div>
-              );
-            })}
-          </div>
 
-          <div className="min-h-0 flex-1 rounded-lg border border-neutral-200 dark:border-neutral-800">
-            <div className="border-b border-neutral-200 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:border-neutral-800">
-              Mermaid
-            </div>
-            <pre className="h-full overflow-auto p-3 text-xs leading-5 text-neutral-700 dark:text-neutral-300">
-              {graphDetails.mermaid}
-            </pre>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    <MicIcon />
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!input.trim() || isLoading}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-white dark:text-neutral-900 bg-neutral-900 dark:bg-neutral-100 hover:bg-neutral-700 dark:hover:bg-neutral-300 disabled:bg-neutral-200 dark:disabled:bg-neutral-800 disabled:text-neutral-400 dark:disabled:text-neutral-600 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <SendIcon />
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
-        </div>
-      </aside>
+        </footer>
+      </div>
     </main>
   );
 }
