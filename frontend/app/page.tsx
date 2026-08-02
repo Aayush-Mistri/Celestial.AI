@@ -33,8 +33,8 @@ type GraphDetails = {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const defaultGraph: GraphDetails = {
-  name: "Basic LangGraph Chatbot",
-  model: "llama-3.3-70b-versatile",
+  name: "AI Agent",
+  model: "",
   steps: [
     { id: "start", label: "START", description: "Request enters the graph with the user's message." },
     { id: "superbot", label: "superbot", description: "ChatGroq receives the stored conversation and creates the reply." },
@@ -291,7 +291,7 @@ export default function Home() {
             <AgentMark />
             <div className="leading-tight">
               <p className="text-[13px] font-semibold tracking-wide text-neutral-800 dark:text-neutral-200">
-                LangGraph Chatbot
+                AI agent
               </p>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-500">
                 {graphDetails.model}
@@ -362,7 +362,7 @@ export default function Home() {
                     <>
                       <AgentMark />
                       <span className="text-neutral-500 dark:text-neutral-400 font-semibold normal-case">
-                        Graph
+                        celestial Being
                       </span>
                     </>
                   )}

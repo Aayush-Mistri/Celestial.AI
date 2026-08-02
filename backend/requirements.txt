@@ -3,3 +3,4 @@ langchain
 langgraph
 langchain_groq
 python-dotenv
+langchain_tavily

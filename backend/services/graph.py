@@ -7,20 +7,41 @@ from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from langchain_tavily import TavilySearch
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+
+
+
+SYSTEM_PROMPT = SystemMessage(content=(
+    "You have access to a web search tool (tavily_search). "
+    "For any question about current events, news, recent dates, prices, "
+    "or anything that could have changed since your training data, "
+    "you MUST call the search tool instead of answering from memory. "
+    "Only skip the tool for timeless, general-knowledge questions."
+))
+
+tavilyTool = TavilySearch(max_results=2)
 
 load_dotenv()
+
+
+tools = [tavilyTool]
+
 
 
 class State(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model="openai/gpt-oss-120b", temperature=1)
 memory = MemorySaver()
+
+llm_with_tools = llm.bind_tools(tools)
 
 
 def superbot(state: State):
-    return {"messages": [llm.invoke(state["messages"])]}
+    messages = [SYSTEM_PROMPT] + state["messages"]
+    return {"messages": [llm_with_tools.invoke(state["messages"])]}
 
 
 graph = StateGraph(State)
@@ -30,28 +51,28 @@ graph.add_edge("superbot", END)
 graph_builder = graph.compile(checkpointer=memory)
 
 
-WORKFLOW_STEPS = [
-    {
-        "id": "start",
-        "label": "START",
-        "description": "Request enters the graph with the user's message.",
-    },
-    {
-        "id": "superbot",
-        "label": "superbot",
-        "description": "ChatGroq receives the stored conversation and creates the reply.",
-    },
-    {
-        "id": "end",
-        "label": "END",
-        "description": "The graph returns the updated message state.",
-    },
-]
+# WORKFLOW_STEPS = [
+#     {                                     NO NEED JUST FEEDING FRONTEND
+#         "id": "start",
+#         "label": "START",
+#         "description": "Request enters the graph with the user's message.",
+#     },
+#     {
+#         "id": "superbot",
+#         "label": "superbot",
+#         "description": "ChatGroq receives the stored conversation and creates the reply.",
+#     },
+#     {
+#         "id": "end",
+#         "label": "END",
+#         "description": "The graph returns the updated message state.",
+#     },
+# ]
 
-WORKFLOW_EDGES = [
-    {"from": "start", "to": "superbot"},
-    {"from": "superbot", "to": "end"},
-]
+# WORKFLOW_EDGES = [
+#     {"from": "start", "to": "superbot"},
+#     {"from": "superbot", "to": "end"},
+# ]
 
 
 def _sse(payload: dict) -> str:
@@ -66,9 +87,7 @@ def get_graph_details() -> dict:
 
     return {
         "name": "Basic LangGraph Chatbot",
-        "model": "llama-3.3-70b-versatile",
-        "steps": WORKFLOW_STEPS,
-        "edges": WORKFLOW_EDGES,
+        "model": "openai/gpt-oss-120b",
         "mermaid": mermaid,
     }
 
