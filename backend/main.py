@@ -30,6 +30,10 @@ class ChatRequest(BaseModel):
 async def graph_endpoint():
     return get_graph_details()
 
+@app.get("/api/admin")
+async def admin_endpoint():
+    return "haha nice try"
+
 
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):

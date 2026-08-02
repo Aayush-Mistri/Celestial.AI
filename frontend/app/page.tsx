@@ -1,12 +1,28 @@
 "use client";
 
 import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+/* ---------------------------------- */
+/* Types                              */
+/* ---------------------------------- */
+
+type ToolActivity = {
+  id: string;
+  name: string;
+  input: string;
+  status: "running" | "success" | "error";
+  summary?: string;
+};
 
 type Message = {
   id: string;
   sender: "user" | "ai";
   text: string;
   timestamp: string;
+  isError?: boolean;
+  toolActivities?: ToolActivity[];
 };
 
 type WorkflowStatus = "idle" | "running" | "complete" | "error";
@@ -33,22 +49,25 @@ type GraphDetails = {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const defaultGraph: GraphDetails = {
-  name: "AI Agent",
+  name: "Celestial Being — AI Agent",
   model: "",
   steps: [
     { id: "start", label: "START", description: "Request enters the graph with the user's message." },
     { id: "superbot", label: "superbot", description: "ChatGroq receives the stored conversation and creates the reply." },
+    { id: "tool_node", label: "tool_node", description: "Executes tool calls (e.g. Tavily web search)." },
     { id: "end", label: "END", description: "The graph returns the updated message state." },
   ],
   edges: [
     { from: "start", to: "superbot" },
+    { from: "superbot", to: "tool_node" },
+    { from: "tool_node", to: "superbot" },
     { from: "superbot", to: "end" },
   ],
-  mermaid: "graph TD\n  START --> superbot\n  superbot --> END",
+  mermaid: "graph TD\n  START --> superbot\n  superbot -->|tool calls| tool_node\n  superbot -->|no tools| END\n  tool_node --> superbot",
 };
 
 /* ---------------------------------- */
-/* Icons — thin stroke, neutral tones */
+/* Icons                              */
 /* ---------------------------------- */
 
 const PlusIcon = () => (
@@ -82,9 +101,34 @@ const UserIcon = () => (
   </svg>
 );
 
+const SearchIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+);
+
+const ToolIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
 const AgentMark = () => (
   <div className="flex items-center justify-center w-5 h-5 rounded-[4px] bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 text-[10px] font-semibold tracking-tight">
-    G
+    C
   </div>
 );
 
@@ -101,6 +145,178 @@ const getTime = () =>
   new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 /* ---------------------------------- */
+/* Tool display name mapping          */
+/* ---------------------------------- */
+
+function formatToolName(name: string): string {
+  const map: Record<string, string> = {
+    tavily_search: "Web Search",
+    tavily: "Web Search",
+  };
+  return map[name.toLowerCase()] || name;
+}
+
+/* ---------------------------------- */
+/* Tool Activity Indicator Component  */
+/* ---------------------------------- */
+
+function ToolActivityIndicator({ activities }: { activities: ToolActivity[] }) {
+  if (!activities || activities.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5 mb-2">
+      {activities.map((activity) => (
+        <div
+          key={activity.id}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-sans transition-all duration-300 ${
+            activity.status === "running"
+              ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50"
+              : activity.status === "success"
+              ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50"
+              : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/50"
+          }`}
+        >
+          {activity.status === "running" ? (
+            <>
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+              </span>
+              <SearchIcon />
+              <span className="font-medium">{formatToolName(activity.name)}</span>
+              {activity.input && (
+                <span className="text-blue-500 dark:text-blue-400 truncate max-w-[200px]">
+                  &quot;{activity.input}&quot;
+                </span>
+              )}
+              <span className="text-blue-400 dark:text-blue-500 animate-pulse">…</span>
+            </>
+          ) : activity.status === "success" ? (
+            <>
+              <CheckIcon />
+              <span className="font-medium">{formatToolName(activity.name)}</span>
+              <span className="text-emerald-500 dark:text-emerald-400">
+                {activity.summary || "Complete"}
+              </span>
+            </>
+          ) : (
+            <>
+              <AlertIcon />
+              <span className="font-medium">{formatToolName(activity.name)}</span>
+              <span className="text-red-500 dark:text-red-400 truncate max-w-[250px]">
+                {activity.summary || "Failed"}
+              </span>
+            </>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------------------------- */
+/* Markdown Components                */
+/* ---------------------------------- */
+
+const markdownComponents = {
+  h1: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h1 className="text-lg font-bold mt-4 mb-2 text-neutral-900 dark:text-neutral-100" {...props}>{children}</h1>
+  ),
+  h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h2 className="text-base font-bold mt-3 mb-1.5 text-neutral-900 dark:text-neutral-100" {...props}>{children}</h2>
+  ),
+  h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h3 className="text-sm font-bold mt-2.5 mb-1 text-neutral-900 dark:text-neutral-100" {...props}>{children}</h3>
+  ),
+  p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p className="mb-2 last:mb-0 leading-relaxed" {...props}>{children}</p>
+  ),
+  ul: ({ children, ...props }: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul className="list-disc pl-5 mb-2 space-y-0.5" {...props}>{children}</ul>
+  ),
+  ol: ({ children, ...props }: React.HTMLAttributes<HTMLOListElement>) => (
+    <ol className="list-decimal pl-5 mb-2 space-y-0.5" {...props}>{children}</ol>
+  ),
+  li: ({ children, ...props }: React.HTMLAttributes<HTMLLIElement>) => (
+    <li className="leading-relaxed" {...props}>{children}</li>
+  ),
+  strong: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
+    <strong className="font-semibold text-neutral-900 dark:text-neutral-100" {...props}>{children}</strong>
+  ),
+  em: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) => (
+    <em className="italic text-neutral-700 dark:text-neutral-300" {...props}>{children}</em>
+  ),
+  code: ({ className, children, ...props }: React.HTMLAttributes<HTMLElement>) => {
+    const isInline = !className;
+    if (isInline) {
+      return (
+        <code
+          className="px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-neutral-800 text-[13px] font-mono text-pink-600 dark:text-pink-400"
+          {...props}
+        >
+          {children}
+        </code>
+      );
+    }
+    return (
+      <code className={`${className} text-[13px] font-mono`} {...props}>
+        {children}
+      </code>
+    );
+  },
+  pre: ({ children, ...props }: React.HTMLAttributes<HTMLPreElement>) => (
+    <pre
+      className="rounded-lg bg-neutral-900 dark:bg-neutral-950 text-neutral-100 p-3 mb-2 overflow-x-auto text-[13px] leading-relaxed border border-neutral-800"
+      {...props}
+    >
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children, ...props }: React.HTMLAttributes<HTMLQuoteElement>) => (
+    <blockquote
+      className="border-l-3 border-neutral-300 dark:border-neutral-600 pl-3 my-2 text-neutral-600 dark:text-neutral-400 italic"
+      {...props}
+    >
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 dark:text-blue-400 underline underline-offset-2 hover:text-blue-500 dark:hover:text-blue-300 transition-colors"
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+  table: ({ children, ...props }: React.HTMLAttributes<HTMLTableElement>) => (
+    <div className="overflow-x-auto mb-2">
+      <table className="w-full text-sm border-collapse border border-neutral-200 dark:border-neutral-700" {...props}>
+        {children}
+      </table>
+    </div>
+  ),
+  th: ({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) => (
+    <th
+      className="px-3 py-1.5 text-left font-semibold bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+      {...props}
+    >
+      {children}
+    </th>
+  ),
+  td: ({ children, ...props }: React.HTMLAttributes<HTMLTableCellElement>) => (
+    <td className="px-3 py-1.5 border border-neutral-200 dark:border-neutral-700" {...props}>
+      {children}
+    </td>
+  ),
+  hr: ({ ...props }: React.HTMLAttributes<HTMLHRElement>) => (
+    <hr className="my-3 border-neutral-200 dark:border-neutral-700" {...props} />
+  ),
+};
+
+/* ---------------------------------- */
 /* Page                               */
 /* ---------------------------------- */
 
@@ -113,16 +329,18 @@ export default function Home() {
   const [workflow, setWorkflow] = useState<Record<string, WorkflowStatus>>({
     start: "idle",
     superbot: "idle",
+    tool_node: "idle",
     end: "idle",
   });
   const [threadId, setThreadId] = useState<string>("");
+  const [activeToolActivities, setActiveToolActivities] = useState<ToolActivity[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const suggestions = [
     "Hi, my name is Aayush",
     "What is my name?",
-    "Explain this LangGraph flow",
+    "What's the latest news about AI?",
     "Give me a short AI agent idea",
   ];
 
@@ -134,7 +352,7 @@ export default function Home() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, activeToolActivities]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/graph`)
@@ -147,7 +365,8 @@ export default function Home() {
     setThreadId(`thread-${Date.now()}`);
     setMessages([]);
     setLatency(null);
-    setWorkflow({ start: "idle", superbot: "idle", end: "idle" });
+    setWorkflow({ start: "idle", superbot: "idle", tool_node: "idle", end: "idle" });
+    setActiveToolActivities([]);
     textareaRef.current?.focus();
   };
 
@@ -172,14 +391,18 @@ export default function Home() {
     setMessages((prev) => [
       ...prev,
       userMessage,
-      { id: aiMessageId, sender: "ai", text: "", timestamp: getTime() },
+      { id: aiMessageId, sender: "ai", text: "", timestamp: getTime(), toolActivities: [] },
     ]);
     setInput("");
     setLatency(null);
     setIsLoading(true);
-    setWorkflow({ start: "running", superbot: "idle", end: "idle" });
+    setWorkflow({ start: "running", superbot: "idle", tool_node: "idle", end: "idle" });
+    setActiveToolActivities([]);
 
     let accumulatedResponse = "";
+    const toolActivities: ToolActivity[] = [];
+    let hasReceivedTokens = false;
+    let hasError = false;
 
     try {
       const response = await fetch(`${API_BASE}/api/chat`, {
@@ -188,7 +411,10 @@ export default function Home() {
         body: JSON.stringify({ message: trimmedInput, thread_id: threadId }),
       });
 
-      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
+      if (!response.ok) {
+        const statusText = response.statusText || "Unknown error";
+        throw new Error(`Backend returned ${response.status} (${statusText})`);
+      }
       if (!response.body) throw new Error("No response stream found");
 
       const reader = response.body.getReader();
@@ -208,13 +434,61 @@ export default function Home() {
           if (!line) continue;
 
           const rawData = line.slice(6);
-          const payload = JSON.parse(rawData);
+          let payload;
+          try {
+            payload = JSON.parse(rawData);
+          } catch {
+            console.warn("Failed to parse SSE payload:", rawData);
+            continue;
+          }
 
           if (payload.type === "workflow") {
             setStepStatus(payload.step, payload.status);
           }
 
+          if (payload.type === "tool_call") {
+            const activity: ToolActivity = {
+              id: crypto.randomUUID(),
+              name: payload.name,
+              input: payload.input || "",
+              status: "running",
+            };
+            toolActivities.push(activity);
+            setActiveToolActivities([...toolActivities]);
+            // Attach to the AI message
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === aiMessageId
+                  ? { ...message, toolActivities: [...toolActivities] }
+                  : message,
+              ),
+            );
+          }
+
+          if (payload.type === "tool_result") {
+            // Find the matching running tool and update it
+            const runningIdx = toolActivities.findIndex(
+              (ta) => ta.name === payload.name && ta.status === "running"
+            );
+            if (runningIdx !== -1) {
+              toolActivities[runningIdx] = {
+                ...toolActivities[runningIdx],
+                status: payload.status === "error" ? "error" : "success",
+                summary: payload.summary || "",
+              };
+            }
+            setActiveToolActivities([...toolActivities]);
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === aiMessageId
+                  ? { ...message, toolActivities: [...toolActivities] }
+                  : message,
+              ),
+            );
+          }
+
           if (payload.type === "token") {
+            hasReceivedTokens = true;
             accumulatedResponse += payload.content;
             setMessages((prev) =>
               prev.map((message) =>
@@ -226,10 +500,39 @@ export default function Home() {
           }
 
           if (payload.type === "error") {
+            hasError = true;
             setStepStatus("superbot", "error");
-            throw new Error(payload.content);
+            const errorContent = payload.content || "An unknown error occurred";
+            const detail = payload.detail || "";
+            setMessages((prev) =>
+              prev.map((message) =>
+                message.id === aiMessageId
+                  ? {
+                      ...message,
+                      text: errorContent,
+                      isError: true,
+                      toolActivities: [...toolActivities],
+                    }
+                  : message,
+              ),
+            );
           }
         }
+      }
+
+      // Handle empty response (no tokens and no explicit error)
+      if (!hasReceivedTokens && !hasError) {
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === aiMessageId
+              ? {
+                  ...message,
+                  text: "No response was generated. The model may have encountered an issue or returned an empty reply. Please try again.",
+                  isError: true,
+                }
+              : message,
+          ),
+        );
       }
 
       setLatency(Math.round(performance.now() - startTime));
@@ -239,7 +542,7 @@ export default function Home() {
       setMessages((prev) =>
         prev.map((message) =>
           message.id === aiMessageId
-            ? { ...message, text: `Backend error: ${errorText}` }
+            ? { ...message, text: errorText, isError: true }
             : message,
         ),
       );
@@ -291,7 +594,7 @@ export default function Home() {
             <AgentMark />
             <div className="leading-tight">
               <p className="text-[13px] font-semibold tracking-wide text-neutral-800 dark:text-neutral-200">
-                AI agent
+                Celestial Being
               </p>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-500">
                 {graphDetails.model}
@@ -362,30 +665,80 @@ export default function Home() {
                     <>
                       <AgentMark />
                       <span className="text-neutral-500 dark:text-neutral-400 font-semibold normal-case">
-                        celestial Being
+                        Celestial Being
                       </span>
                     </>
                   )}
                   <span className="lowercase tracking-normal">· {msg.timestamp}</span>
                 </div>
 
-                <div
-                  className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm rounded-xl border font-sans leading-relaxed whitespace-pre-wrap
-                    ${
-                      msg.sender === "user"
-                        ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-neutral-900 dark:border-neutral-100"
-                        : "bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 border-neutral-200 dark:border-neutral-800"
-                    }`}
-                >
-                  {msg.text || (isLoading && msg.sender === "ai" && (
-                    <div className="flex items-center gap-2 text-xs font-mono text-neutral-400 dark:text-neutral-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-neutral-600 animate-pulse" />
-                      <span>Running graph…</span>
+                {/* Tool activity indicators (only for AI messages) */}
+                {msg.sender === "ai" && msg.toolActivities && msg.toolActivities.length > 0 && (
+                  <div className="max-w-[85%] sm:max-w-[75%]">
+                    <ToolActivityIndicator activities={msg.toolActivities} />
+                  </div>
+                )}
+
+                {/* Message bubble */}
+                {msg.isError ? (
+                  /* Error message card */
+                  <div className="max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm rounded-xl border font-sans leading-relaxed bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 shrink-0">
+                        <AlertIcon />
+                      </span>
+                      <div>
+                        <p className="font-medium text-xs uppercase tracking-wide mb-1 text-red-500 dark:text-red-400">
+                          Error
+                        </p>
+                        <p>{msg.text}</p>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[85%] sm:max-w-[75%] px-4 py-3 text-sm rounded-xl border font-sans leading-relaxed
+                      ${
+                        msg.sender === "user"
+                          ? "bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 border-neutral-900 dark:border-neutral-100 whitespace-pre-wrap"
+                          : "bg-white dark:bg-[#191919] text-neutral-900 dark:text-neutral-100 border-neutral-200 dark:border-neutral-800"
+                      }`}
+                  >
+                    {msg.sender === "ai" ? (
+                      msg.text ? (
+                        <div className="prose-sm">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={markdownComponents}
+                          >
+                            {msg.text}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        isLoading && (
+                          <div className="flex items-center gap-2 text-xs font-mono text-neutral-400 dark:text-neutral-600">
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neutral-400 dark:bg-neutral-500 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-neutral-500 dark:bg-neutral-400"></span>
+                            </span>
+                            <span>Thinking…</span>
+                          </div>
+                        )
+                      )
+                    ) : (
+                      msg.text
+                    )}
+                  </div>
+                )}
               </div>
             ))}
+
+            {/* Live tool activity indicator (while streaming, before attached to message) */}
+            {isLoading && activeToolActivities.some((a) => a.status === "running") && (
+              <div className="max-w-[85%] sm:max-w-[75%]">
+                {/* This is shown as a floating indicator during active tool calls */}
+              </div>
+            )}
 
             <div ref={messagesEndRef} />
           </div>
@@ -403,7 +756,7 @@ export default function Home() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask the LangGraph chatbot…"
+                placeholder="Ask Celestial Being anything…"
                 rows={2}
                 disabled={isLoading}
                 className="w-full px-4 pt-3.5 pb-1.5 bg-transparent border-none text-sm font-sans focus:outline-none resize-none placeholder:text-neutral-400 dark:placeholder:text-neutral-600 disabled:opacity-50"
