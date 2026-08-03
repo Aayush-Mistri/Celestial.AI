@@ -8,6 +8,7 @@ from services.graph import get_graph_details, stream_chat
 
 app = FastAPI()
 
+# Default origins for local development
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -15,16 +16,29 @@ allowed_origins = [
     "http://127.0.0.1:3001",
 ]
 
-allowed_origins_env = os.getenv("ALLOWED_ORIGINS")
-if allowed_origins_env:
-    allowed_origins.extend([origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()])
+# Add origins from environment variable
+# Example:
+# ALLOWED_ORIGINS=https://your-app.vercel.app,https://www.yourdomain.com
+env_origins = os.getenv("ALLOWED_ORIGINS", "")
+if env_origins:
+    allowed_origins.extend(
+        [
+            origin.strip()
+            for origin in env_origins.split(",")
+            if origin.strip()
+        ]
+    )
+
+# Remove duplicates
+allowed_origins = list(dict.fromkeys(allowed_origins))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -33,13 +47,19 @@ class ChatRequest(BaseModel):
     thread_id: str = "default"
 
 
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
+
 @app.get("/api/graph")
 async def graph_endpoint():
     return get_graph_details()
 
+
 @app.get("/api/admin")
 async def admin_endpoint():
-    return "haha nice try"
+    return {"message": "haha nice try"}
 
 
 @app.post("/api/chat")
