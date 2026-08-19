@@ -173,7 +173,7 @@ Sends a message and streams the response as SSE events.
 
 | Layer | Technology |
 |-------|-----------|
-| **LLM** | Llama 3.3 70B via Groq |
+| **LLM** |  Groq Model |
 | **Orchestration** | LangGraph + LangChain |
 | **Backend** | FastAPI (Python 3.12) |
 | **Frontend** | Next.js 16, React 19, TypeScript |
