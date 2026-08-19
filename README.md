@@ -8,7 +8,7 @@ A full-stack AI chatbot powered by **LangGraph** and **Groq**, featuring real-ti
 
 - **LangGraph Execution Engine** — Runs a compiled `StateGraph` with checkpointed memory via LangGraph's `MemorySaver`, enabling persistent multi-turn conversations per thread.
 - **Streaming Responses (SSE)** — The backend streams workflow status events and token-by-token AI output over Server-Sent Events for a real-time chat experience.
-- **Groq-Powered LLM** — Uses the `llama-3.3-70b-versatile` model hosted on Groq for fast, high-quality inference.
+- **Groq-Powered LLM** — Uses Groq model hosted on Groq for fast, high-quality inference.
 - **Live Workflow Visualizer** — A sidebar panel displays the graph's execution steps (`START → superbot → END`) with real-time status indicators (idle / running / complete / error).
 - **Thread Memory** — Each conversation thread maintains its own message history, allowing the model to recall context from earlier messages.
 - **Mermaid Graph Export** — The backend exposes the compiled graph as a Mermaid diagram string for visualization.
@@ -21,8 +21,8 @@ A full-stack AI chatbot powered by **LangGraph** and **Groq**, featuring real-ti
 ```
 ┌─────────────────────────────┐       SSE Stream        ┌──────────────────────────────┐
 │        Frontend             │ ◄────────────────────── │          Backend             │
-│   Next.js 16 + React 19    │ ─── POST /api/chat ───► │   FastAPI + LangGraph        │
-│   Tailwind CSS 4            │ ─── GET  /api/graph ──► │   ChatGroq (Llama 3.3 70B)   │
+│   Next.js 16 + React 19     │ ─── POST /api/chat ───► │   FastAPI + LangGraph        │
+│   Tailwind CSS 4            │ ─── GET  /api/graph ──► │   ChatGroq                   │
 │   TypeScript                │                         │   Python 3.12 + uv           │
 └─────────────────────────────┘                         └──────────────────────────────┘
 ```
